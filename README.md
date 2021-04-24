@@ -8,12 +8,13 @@ A python library with functions and methods for reading .op2 files and element-m
 
 **Capabilities of OP-Map:**
 + read .op2 files created with solver NASTRAN, Altair OPTISTRUCT
-+ transform .op2 2D-element results from element coordiante (native format in .op2) to material coordinates
++ transform .op2 2D-element results from element coordiante (native format in .op2) to material coordinates for 2D elements
 + plot element mappings of specific structural components as defined in the mapping file.
 + plot mappings of element forces for a specific components and a single load case
-+ plot mappings of maximum elemment forces for a specific component for all load cases loaded from the .op2 file
++ plot mappings of maximum, minimum or maximum absolute elemment forces for a specific component for all load cases included in the .op2 file
 + change the mapping file initially loaded for a new one
 + list all load cases in the loaded .op2 file
++ save all results in a dedicated Excel workbook
 
 
-FRLM, v0.5
+FRLM, v0.6
