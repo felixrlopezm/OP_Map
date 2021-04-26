@@ -17,4 +17,4 @@ A python library with functions and methods for reading .op2 files and element-m
 + save all results in a dedicated Excel workbook
 
 
-FRLM, v0.6
+FRLM, v0.7
