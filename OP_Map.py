@@ -1,9 +1,9 @@
 # OP_Map library: auxiliary functions, model class and its methods
 # by Félix Ramón López Martínez
-# v0.6
+# v0.7
+# 2021
 
 # Import Libraries
-#import pyNastran
 import json
 import numpy as np
 import pandas as pd
@@ -128,7 +128,13 @@ def mapping_extraction(component, mapping_path):
         
     return elm_mapping_flt, x_labels, y_labels, n_dim, m_dim    
 
-
+def formate_axes(plot):
+    plot.set_xticklabels(plot.get_xmajorticklabels(), fontsize = 30);
+    plot.set_yticklabels(plot.get_ymajorticklabels(), fontsize = 30, rotation = 0);
+    ticklbls = plot.get_xticklabels(which='both')    # 
+    for x in ticklbls:
+        x.set_ha('left')
+    
 ########################################################################
 # MODEL CLASSS AND METHODS
 ########################################################################
@@ -319,18 +325,28 @@ class Model:
         # Removing values from -666 elements
         output_env_lc = np.multiply(output_env_lc, elm_mapping_mask)
 
-        # Plotting heatmap (fishtail shape)
+        # Plotting heatmaps (fishtail shape)
         plt.figure(figsize=(40,20))
+        # Plot 1
         plt.subplot(2, 1, 1)
         plot_1 = sns.heatmap(output_env, annot=True, fmt='.1f', annot_kws={"size": 20},
                              linewidths=2, cmap='coolwarm',
                              xticklabels=x_labels, yticklabels=y_labels);
+        formate_axes(plot_1)
+        plt.title('Component {}: {} element forces in dimension field {}'.format(
+            component, env_type, value_field), fontsize = 30)
+        
+        # Plot 2
         plt.subplot(2, 1, 2)
         plot_2 = sns.heatmap(output_env_lc, annot=True, fmt='.0f', annot_kws={"size": 20},
                              cmap=ListedColormap(['whitesmoke']),
                              linewidths=1, linecolor='White',
                              xticklabels=x_labels, yticklabels=y_labels);
-        
+        formate_axes(plot_2)
+        plt.title('Component {}: load cases for {} element forces in dimension field {}'.format(
+            component, env_type, value_field), fontsize = 30)
+
+        # Turning the plot into an image
         plot_img = fig2img(plot_1.get_figure())
         
         # Saving results in the excel workbook if required
@@ -385,7 +401,13 @@ class Model:
         # Plotting heatmap (fishtail shape)
         plt.figure(figsize=(40,10))
         plot = sns.heatmap(output, annot=True, fmt='.1f',  annot_kws={"size": 20},
-                           linewidths=2, cmap='coolwarm');
+                           linewidths=2, cmap='coolwarm',
+                           xticklabels=x_labels, yticklabels=y_labels);
+        formate_axes(plot)
+        plt.title('Component {}: element forces in dimension field {} and for load case {}'.format(
+            component, value_field, lc), fontsize = 30)
+                  
+        # Turning the plot into an image
         plot_img = fig2img(plot.get_figure())
         
         # Saving results in the excel workbook if required
@@ -423,19 +445,10 @@ class Model:
                            cmap=ListedColormap(['whitesmoke']),
                            linewidths=1, linecolor='white',
                            xticklabels=x_labels, yticklabels=y_labels);
+        formate_axes(plot)
+        plt.title('Element mapping of component: {}'.format(component), fontsize = 30)
         
-        plot.set_xticklabels(plot.get_xmajorticklabels(), fontsize = 30);
-        plot.set_yticklabels(plot.get_ymajorticklabels(), fontsize = 30);
-        ticklbls = plot.get_xticklabels(which='both')
-        for x in ticklbls:
-            x.set_ha('left')
-        
-        plt.yticks(rotation=0)
-    
-        plt.title('Element mapping of component: {}'.format(component), fontsize = 20)
-        #plt.xlabel('X-label', fontsize = 15)
-        #plt.ylabel('Y-label', fontsize = 15)
-        
+        # Turning the plot into an image
         plot_img = fig2img(plot.get_figure())
         
         # Saving results in the excel workbook if required
