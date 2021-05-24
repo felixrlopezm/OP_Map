@@ -55,12 +55,12 @@ OP_Map runs in a Jupyter Notebook and requires Python 3.7 or higher. Moreover, t
 + json
 
 
-### Spetial caution for apparently pyNastran non supported versions of OPTISTRUCT
+### Special caution for apparently pyNastran non supported versions of OPTISTRUCT
 As said before in the overview, OP_Map is based on the library pyNastran.
 
 PyNastran can deal with .op2 files coming from a number of solvers, such as NASTRAN or OPTISTRUCT. It might happen, however, that a fully operative .op2 file created with OPTISTRUCT trigger an error message like this: "RuntimeError: unknown version=b'OS2019.2'".
 
-<img src="aux_img/optistruct_version_error.png"  style="width: 400px;"/>
+<img src="aux_img/optistruct_version_error.png"  style="width: 200px;"/>
 
 This is because the specific OPTISTRUCT version employed for generating the .op2 file is not within the list of OPTISTRUCT versions that manage the pyNastran library. To fix that, follow next steps:
 
@@ -68,11 +68,11 @@ This is because the specific OPTISTRUCT version employed for generating the .op2
 
 2.- Within the definition code for the function *_parse_nastran_version_8* find the 'elif' command that defines the versions for OPTISTRUCT, add the specific version of OPTISTRUCT that triggered the error (that indicated in the error message) and save the file without changing its name.
 
-<img src="aux_img/adding_optistruct_version_to_pyNastran.png" style="width: 400px;"/>
+<img src="aux_img/adding_optistruct_version_to_pyNastran.png" style="width: 200px;"/>
 
 
 3.- Load again the OP_Map library and try again to run de code.
 
 
-# Use of OP_Map
+## Use of OP_Map
 Open the Jupiter Notebook "How_to_use_OP_Map.ipynb". It will guide you with clear examples about through its capabilities.
