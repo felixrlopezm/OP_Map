@@ -29,7 +29,7 @@ The core of the library is based on the capabilities of **[pyNastran](https://py
 ###  Input OP_Map files
 OP_Ma requires two mandatory files for running:
 + .op2 file with the results of FEM under consideration; it must have been solved to provide element forces in cquad and/or ctria elements 
-+ mapping file (in .json format) of the structural part of interest; for building the element mapping in the required format, use the auxiliary jupyter notebook "json-builder.ipnb" file also provided with OP_Map.
++ mapping file (in .json format) of the structural part of interest; for building the element mapping in the required format, use the auxiliary jupyter notebook "mapping-json-builder.ipnb" file also provided with OP_Map.
 
 Moreover, if the element results need to be transformed from element coordinates to material coordinates the following file is also required:
 + .bdf file associated to the previous .op2 file;
