@@ -42,7 +42,7 @@ In addition, you can also download the how_to_use_OP_map.ipynb file, which conta
 
 
 ### Python version and required libraries
-OP_Map runs in a Jupyter Notebook and requires Python 3.7 or higher. Moreover, the following libraries are called by OP_Map and, therefore, must be installed in the working environment:
+OP_Map runs in a Jupyter Notebook and requires Python 3.7 or higher. Moreover, the following libraries are called by OP_Map and, therefore, must be installed in the working virtual environment:
 + pyNastran
 + numpy 
 + pandas
@@ -54,6 +54,7 @@ OP_Map runs in a Jupyter Notebook and requires Python 3.7 or higher. Moreover, t
 + openpyxl
 + json
 
+Therefore, check that your working virtual environment has installed all those dependencies. Otherwise, installed them using the following command: `pip install -r requirements.txt`.
 
 ### Special caution for apparently pyNastran non supported versions of OPTISTRUCT
 As said before in the overview, OP_Map is based on the library pyNastran.
