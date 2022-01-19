@@ -63,9 +63,13 @@ PyNastran can deal with .op2 files coming from a number of solvers, such as NAST
 
 <img src="aux_img/optistruct_version_error.png"  style="width: 600px;"/>
 
-This is because the specific OPTISTRUCT version employed for generating the .op2 file is not within the list of OPTISTRUCT versions that manage the pyNastran library. To fix that, follow next steps:
+This is because the specific OPTISTRUCT version employed for generating the .op2 file is not within the list of OPTISTRUCT versions that the pyNastran library manages. To fix that, follow next steps:
 
-1.- Locate file 'op2_reader.py' in the installation folder of pyNastran and open that file.
+1.- Locate file `op2_reader.py` in the following path within the installation folder of pyNastran paskage and open that file: `../pyNastran/op2/op2_interface`   
+
+Note that one way to know the path of the pyNastran package is to run the following commands in a jupyter notebook:  
+`import pyNastran`   
+`print(pyNastran.__file__)`  
 
 2.- Within the definition code for the function *_parse_nastran_version_8* find the 'elif' command that defines the versions for OPTISTRUCT, add the specific version of OPTISTRUCT that triggered the error (that indicated in the error message) and save the file without changing its name.
 
