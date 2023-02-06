@@ -1,7 +1,14 @@
 # OP_Map library: auxiliary functions, model class and its methods
 # by Félix Ramón López Martínez
-# v1.0
-# 2021
+# v1.1
+# february-2023
+# Release Notes
+#   v1.0 first functional code
+#   v1.1 added capability to extract forces in crod elements
+#        creation of load_cases_list function to optimize the code
+#        some functions remaned to distinguish between 2D and 1D forces
+#
+#
 
 # Import Libraries
 import json
@@ -25,6 +32,8 @@ from pyNastran.op2.op2 import OP2
 from pyNastran.bdf.bdf import BDF
 from pyNastran.op2.data_in_material_coord import data_in_material_coord
 
+
+OP_Map_version = 1.1
 
 ########################################################################
 # AUXILIARY FUNCTIONS
@@ -141,6 +150,7 @@ def formate_axes(plot):
 
 class Model:
     def __init__(self, op2_path, mapping_path):
+        self.OP_Map_version = 1.1
         self.op2_path = op2_path
         self.mapping_path = mapping_path
         self.op2 = OP2(debug=False)         # instantiate self.op2
@@ -148,6 +158,7 @@ class Model:
         self.load_cases = []
         self.workbook = os.path.splitext(op2_path)[0] + '.xlsx'   # instantiate excel workbook name
         self.ws_counter = int(0)                             # instantiate counter for excel sheets
+        self.lc_list_check = False
 
         # Creating a new Excel workbook and the Index_of_results sheet
         wb = Workbook()
@@ -163,10 +174,20 @@ class Model:
         wb.save(self.workbook)
 
         # Output message
+        print('Model initialized with OP_Map, version', OP_Map_version)
         print('Created excel workbook:', self.workbook)
 
+    def load_cases_list(self,force):
+        # Creating a list with all load cases
+        if self.lc_list_check == False:
+            self.load_cases = [lc for lc in force.keys()]
+            print('Load cases in the op2 file:',len(self.load_cases)) 
+            self.lc_list_check = True
+        
+        return
 
-    def r_op2_eforces(self):
+
+    def r_op2_2D_eforces(self):
         ''' method for reading the element forces from the OP2 file
         '''
 
@@ -178,8 +199,7 @@ class Model:
         tr3_force = self.op2.ctria3_force
 
         # Creating a list with all load cases
-        self.load_cases = [lc for lc in cq4_force.keys()]
-        print('Load cases in the op2 file:',len(self.load_cases))
+        self.load_cases_list(cq4_force)
 
         # Creating a list with all the elements ID and type
         lc = self.load_cases[0]
@@ -194,12 +214,42 @@ class Model:
             self.elem_to_idx[elm] = idx
 
         # Output message
-        print('Loaded ctria3 and cquad4 element forces in element coordinates from op2 file:', self.op2_path)
+        print('Loaded ctria3 and cquad4 element forces in ELEMENT COORDINATE system from op2 file:', self.op2_path)
 
         return
 
 
-    def r_op2_eforces_matcoord(self, bdf_path):
+    def r_op2_1D_eforces(self):
+        ''' method for reading the element forces from the OP2 file
+        '''
+
+        self.op2.set_results(('force.crod_force'))
+        self.op2.read_op2(self.op2_path);
+
+        # Getting forces for all subcases  --> diccionary with key the LC and values the force values
+        rod_force = self.op2.crod_force
+
+        # Creating a list with all load cases
+        self.load_cases_list(rod_force)
+
+        # Creating a list with all the elements ID and type
+        lc = self.load_cases[0]
+        rod_elements = rod_force[lc].element
+        #elements = np.concatenate((cq4_elements,tr3_elements), axis=0).tolist()
+
+        # Creating a dictionary from element to index starting with 1
+        # first index associated to dummy element -666
+        self.elem_to_idx[-666]=0
+        for idx, elm in enumerate(rod_elements,1):
+            self.elem_to_idx[elm] = idx
+
+        # Output message
+        print('Loaded crod element forces in ELEMENT COORDINATE system from op2 file:', self.op2_path)
+
+        return
+
+
+    def r_op2_2D_eforces_matcoord(self, bdf_path):
         ''' Method for reading the element forces contained in the OP2 file in material coordinates
             bdf_path is the path to the bdf file that corresponds to the OP2 file
         '''
@@ -217,8 +267,7 @@ class Model:
         tr3_force = self.op2.ctria3_force
 
         # Creating a list with all load cases
-        self.load_cases = [lc for lc in cq4_force.keys()]
-        print('Load cases in the op2 file:',len(self.load_cases))
+        self.load_cases_list(cq4_force)
 
         # Creating a list with all the elements ID and type
         lc = self.load_cases[0]
@@ -233,7 +282,7 @@ class Model:
             self.elem_to_idx[elm] = idx
 
         # Output message
-        print('Loaded ctria3 and cquad4 element forces in material coordinates from op2 file:', self.op2_path)
+        print('Loaded ctria3 and cquad4 element forces in MATERIAL COORDINATE system from op2 file:', self.op2_path)
 
         return
 
@@ -256,7 +305,7 @@ class Model:
         return
 
 
-    def plot_env_eforces(self, component, env_type, value_field, excel = False):
+    def plot_env_2D_eforces(self, component, env_type, value_field, excel = False):
         ''' This methods plots the MAX, MIN or MAXABS element forces for the
             component and value field passed in.
             Inputs:
@@ -358,8 +407,109 @@ class Model:
 
         return
 
+    def plot_env_1D_eforces(self, component, env_type, value_field, excel = False):
+        ''' This methods plots the MAX, MIN or MAXABS element forces for the
+            component and value field passed in.
+            Inputs:
+                component: name of the component to plot acc. to mapping file
+                env_type: MAX, MIN or MAXABS according to the desired envelope
+                value_field: force compoment acc. to F06 order
+                excel: if True, then results will be stored in the excel workbook
+            Output:
+                plot of the results (seaborn heatmap image)
+                and results saved in the excel file if requested
+        '''
+        # Mapping extraction for given component
+        elm_mapping_flt, x_labels, y_labels, n_dim, m_dim, = mapping_extraction(component, self.mapping_path)
 
-    def plot_eforces(self, lc, component, value_field, excel = False):
+        # Mask creation for filtering results before plotting: 0 for -666 elements and 1 for all the others
+        elm_mapping_flt_mask = [1 if elm != -666 else np.nan for elm in elm_mapping_flt]
+        elm_mapping_mask = np.array(elm_mapping_flt_mask).reshape(n_dim, m_dim)
+
+        # From element_mapping (flatten) to index_mapping
+        # Note that element with id -666 is turn into index 0 (and later in nan when getting the results)
+        idx_mapping = [self.elem_to_idx[elm] for elm in elm_mapping_flt]
+
+        # Nunber of load load_cases
+        d_dim = len(self.load_cases)
+
+        # Initializing variable output_flt
+        output_flt = np.zeros((d_dim, len(idx_mapping)))
+
+        for idx, lc in enumerate(self.load_cases):
+            # Accessing individual element forces for a given lC
+            rod_forces_lc = self.op2.crod_force[lc].data
+
+            # Concatenating data from cquads and trias
+            forces_lc = np.concatenate((rod_forces_lc), axis=1)
+
+            # Removing first dimension
+            #forces_lc = forces_lc.reshape(forces_lc.shape[1], forces_lc.shape[2])
+
+            # Adding a first line of nan values associated to element index = 0 (dummy element-666)
+            nones = np.repeat(np.nan, forces_lc.shape[1], axis=0).reshape(1, forces_lc.shape[1])
+            forces_lc = np.concatenate((nones, forces_lc), axis=0)
+
+            # Getting results for the idx_mapping
+            output_flt[idx,:] = forces_lc[idx_mapping, (value_field-1)]
+
+        # Deflattening
+        output = output_flt.reshape(d_dim, n_dim, m_dim)
+
+        # Envelope options
+        if env_type == 'MAX':
+            output_env = np.max(output, axis=0)               # Maximum values
+            output_env_lc_idx = np.argmax(output, axis=0)     # Index in axis=0 of maximum values (=lc index)
+        elif env_type == 'MIN':
+            output_env = np.min(output, axis=0)               # Minimum values
+            output_env_lc_idx = np.argmin(output, axis=0)     # Index in axis=0 of minimum values (=lc index)
+        elif env_type == 'MAXABS':
+            output_env = np.max(np.absolute(output), axis=0)  # Maximum absolute values
+            output_env_lc_idx = np.argmax(np.absolute(output), axis=0)    # Index in axis=0 of max abs values (=lc index)
+        else:
+            print('Incorrect envelope type selection. Choose MAX, MIN or MAXABS')
+
+        # From lc_index to lc id
+        output_env_lc_flt = [self.load_cases[idx] for idx in output_env_lc_idx.reshape(-1).tolist()]
+        output_env_lc = np.array(output_env_lc_flt).reshape(n_dim, m_dim)
+        # Removing values from -666 elements
+        output_env_lc = np.multiply(output_env_lc, elm_mapping_mask)
+
+        # Plotting heatmaps (fishtail shape)
+        plt.figure(figsize=(40,20))
+        # Plot 1
+        plt.subplot(2, 1, 1)
+        plot_1 = sns.heatmap(output_env, annot=True, fmt='.1f', annot_kws={"size": 20},
+                             linewidths=2, cmap='coolwarm',
+                             xticklabels=x_labels, yticklabels=y_labels);
+        formate_axes(plot_1)
+        plt.title('Component {}: {} element forces in dimension field {}'.format(
+            component, env_type, value_field), fontsize = 30)
+
+        # Plot 2
+        plt.subplot(2, 1, 2)
+        plot_2 = sns.heatmap(output_env_lc, annot=True, fmt='.0f', annot_kws={"size": 20},
+                             cmap=ListedColormap(['whitesmoke']),
+                             linewidths=1, linecolor='White',
+                             xticklabels=x_labels, yticklabels=y_labels);
+        formate_axes(plot_2)
+        plt.title('Component {}: load cases for {} element forces in dimension field {}'.format(
+            component, env_type, value_field), fontsize = 30)
+
+        # Turning the plot into an image
+        plot_img = fig2img(plot_1.get_figure())
+
+        # Saving results in the excel workbook if required
+        if excel:
+            self.ws_counter += 1
+            tag = 'Component: {}. {} element forces in dimension {} and corresponding load cases'.format(
+                component, env_type, value_field)
+            save_in_excel(self.workbook, self.ws_counter, tag, [output_env, output_env_lc], img = plot_img)
+
+        return
+
+
+    def plot_2D_eforces(self, lc, component, value_field, excel = False):
         ''' This methods plots element forces for the load case,
             component and value field passed in.
             Inputs:
@@ -418,6 +568,68 @@ class Model:
             save_in_excel(self.workbook, self.ws_counter, tag, [output], img = plot_img)
 
         return
+
+
+    def plot_1D_eforces(self, lc, component, value_field, excel = False):
+        ''' This methods plots element forces for the load case,
+            component and value field passed in.
+            Inputs:
+                lc: load case to plot
+                component: name of the component to plot acc. to mapping file
+                value_field: force compoment acc. to F06 order
+                excel: if True, then results will be stored in the excel workbook
+            Output:
+                plot of the results (seaborn heatmap image)
+                and results saved in the excel file if requested
+        '''
+        # Mapping extraction for given component
+        elm_mapping_flt, x_labels, y_labels, n_dim, m_dim, = mapping_extraction(component, self.mapping_path)
+
+        # From element_mapping (flatten) to index_mapping
+        # Note that element with id -666 is turn into index 0 (and later in nan when getting the results)
+        idx_mapping = [self.elem_to_idx[elm] for elm in elm_mapping_flt]
+
+        # Accessing individual element forces for a given lC
+        rod_forces_lc = self.op2.crod_force[lc].data
+
+        # Concatenating data from cquads and trias
+        forces_lc = np.concatenate((rod_forces_lc), axis=1)
+
+        # Removing first dimension
+        #forces_lc = forces_lc.reshape(forces_lc.shape[1], forces_lc.shape[2])
+
+        # Adding a first line of nan values associated to element index = 0 (dummy element-666)
+        nones = np.repeat(np.nan, forces_lc.shape[1], axis=0).reshape(1, forces_lc.shape[1])
+        forces_lc = np.concatenate((nones, forces_lc), axis=0)
+
+        # Getting results for the idx_mapping
+        output_flt = forces_lc[idx_mapping, (value_field-1)]
+
+        # Deflattening
+        output = output_flt.reshape(n_dim, m_dim)
+
+        # Plotting heatmap (fishtail shape)
+        plt.figure(figsize=(40,10))
+        plot = sns.heatmap(output, annot=True, fmt='.1f',  annot_kws={"size": 20},
+                           linewidths=2, cmap='coolwarm',
+                           xticklabels=x_labels, yticklabels=y_labels);
+        formate_axes(plot)
+        plt.title('Component {}: element forces in dimension field {} and for load case {}'.format(
+            component, value_field, lc), fontsize = 30)
+
+        # Turning the plot into an image
+        plot_img = fig2img(plot.get_figure())
+
+        # Saving results in the excel workbook if required
+        if excel:
+            self.ws_counter += 1
+            tag = 'Component: {}. Element forces in dimension {} and for load case '.format(
+                component, value_field) + str(lc)
+            save_in_excel(self.workbook, self.ws_counter, tag, [output], img = plot_img)
+
+        return
+
+
 
 
     def plot_component_mapping(self, component, excel = False):
