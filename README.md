@@ -1,5 +1,5 @@
 # OP_Map
-OP_Map, version 1.2, by [Félix Ramón López Martínez](mailto:frlopezm@gmail.com), January 2024
+OP_Map, version 1.2, by [Félix Ramón López Martínez](mailto:frlopezm@gmail.com), January 2025
 
 ## Overview
 
