@@ -1,5 +1,5 @@
 # OP_Map
-OP_Map, version 1.1, by [Félix Ramón López Martínez](mailto:frlopezm@gmail.com), February 2023
+OP_Map, version 1.2, by [Félix Ramón López Martínez](mailto:frlopezm@gmail.com), January 2024
 
 ## Overview
 
@@ -59,7 +59,7 @@ OP_Map runs in a Jupyter Notebook and requires Python 3.7 or higher. Moreover, t
 ### Special caution for apparently pyNastran non supported versions of OPTISTRUCT
 As said before in the overview, OP_Map is based on the library pyNastran.
 
-PyNastran can deal with .op2 files coming from a number of solvers, such as NASTRAN or OPTISTRUCT. It might happen, however, that a fully operative .op2 file created with OPTISTRUCT trigger an error message like this: "RuntimeError: unknown version=b'OS2019.2'".
+PyNastran can deal with .op2 files coming from a number of solvers, such as NASTRAN or OPTISTRUCT. It might happen, however, that a fully operative .op2 file created with OPTISTRUCT trigger an error message like this: "RuntimeError: unknown version=b'OS2019.2'" when using a legacy version of the pyNastran library (previous to version 1.4).
 
 <img src="aux_img/optistruct_version_error.png"  style="width: 600px;"/>
 
