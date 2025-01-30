@@ -1,13 +1,14 @@
 # OP_Map library: auxiliary functions, model class and its methods
 # by Félix Ramón López Martínez
-# v1.1
-# february-2023
+# v1.2
+# January-2025
 # Release Notes
 #   v1.0 first functional code
 #   v1.1 added capability to extract forces in crod elements
 #        creation of load_cases_list function to optimize the code
 #        some functions remaned to distinguish between 2D and 1D forces
-#
+#   v1.2 correction of errors associated to read and save excel files
+#        and improvement of the code
 #
 
 # Import Libraries
@@ -21,8 +22,7 @@ import io
 
 from PIL import Image
 
-from openpyxl import Workbook
-from openpyxl import load_workbook
+from openpyxl import Workbook, load_workbook
 from openpyxl.drawing.image import Image as Img
 from openpyxl.styles import Font
 
@@ -33,7 +33,8 @@ from pyNastran.bdf.bdf import BDF
 from pyNastran.op2.data_in_material_coord import data_in_material_coord
 
 
-OP_Map_version = 1.1
+# Definition of OP_Map version
+OP_Map_version = '1.2'
 
 ########################################################################
 # AUXILIARY FUNCTIONS
@@ -57,57 +58,8 @@ def read_mapping(mapping_path):
         elm_mapping[key] = {'mapping': np.array(mapping[key]['mapping']),
                             'x_labels': mapping[key]['x_labels'],
                             'y_labels': mapping[key]['y_labels']}
-
+    
     return elm_mapping
-
-def save_in_excel(workbook, ws_counter, tag, data_list, img=None):
-    ''' + workbook is the path/name of an already created excel file
-        + tag is an identification aboute the data
-        + data is a numpy object
-        + img is an image (optional)
-    '''
-    # Load excel workbook and create the writer with openpyxl
-    book = load_workbook(workbook)
-    writer = pd.ExcelWriter(workbook, engine = 'openpyxl')
-    writer.book = book
-
-    # Name for a new workbook sheet with a sequencial id
-    ws_name = 'Sheet_' + str(ws_counter)
-
-    # Write a line in the Index_of_results sheet of the workbook
-    ws_index = book['Index_of_results']
-    cell_pos = 'A' + str(4 + ws_counter)
-    ws_index[cell_pos] = ws_name + ' ----> ' + tag
-    ws_index[cell_pos].font = Font(size=12, color="000000FF")
-
-    # Hyperlink from the new line in the index to its sheet
-    link = '#' + ws_name + '!A1'
-    ws_index[cell_pos].hyperlink = link
-
-    # Writing the data in the corresponding new sheet
-    row_idx = 0
-    for data in data_list:
-        df = pd.DataFrame(data)    # Create a Pandas dataframe from the data
-        df_height = df.shape[0]
-        df.to_excel(writer, sheet_name = ws_name, startrow = (row_idx),
-                    startcol=0, index=False, header=False)
-        row_idx += df_height + 4
-
-    # Inserting the image in the new sheet
-    if img != None:
-        sheet = writer.book[ws_name]
-        img=Img(img)
-        cell_pos = 'A' + str(row_idx)
-        sheet.add_image(img, cell_pos)
-
-    # Save and close the workbook
-    writer.save()
-    writer.close()
-
-    # Output message
-    print('Results saved in excel workbook:', workbook)
-
-    return
 
 
 def fig2img(fig):
@@ -116,7 +68,7 @@ def fig2img(fig):
     fig.savefig(buf)
     buf.seek(0)
     img = Image.open(buf)
-
+    
     return img
 
 
@@ -134,7 +86,7 @@ def mapping_extraction(component, mapping_path):
     m_dim = elm_mapping.shape[1]
     # Matrix flattening and turning into a list
     elm_mapping_flt = elm_mapping.reshape(-1,).tolist()
-
+    
     return elm_mapping_flt, x_labels, y_labels, n_dim, m_dim
 
 def formate_axes(plot):
@@ -150,47 +102,47 @@ def formate_axes(plot):
 
 class Model:
     def __init__(self, op2_path, mapping_path):
-        self.OP_Map_version = 1.1
+        self.OP_Map_version = OP_Map_version
         self.op2_path = op2_path
         self.mapping_path = mapping_path
         self.op2 = OP2(debug=False)         # instantiate self.op2
         self.elem_to_idx = {}
         self.load_cases = []
-        self.workbook = os.path.splitext(op2_path)[0] + '.xlsx'   # instantiate excel workbook name
-        self.ws_counter = int(0)                             # instantiate counter for excel sheets
         self.lc_list_check = False
 
         # Creating a new Excel workbook and the Index_of_results sheet
-        wb = Workbook()
-        ws = wb.active
-        ws.sheet_view.showGridLines = False         # grid lines off
-        ws.title = 'Index_of_results'               # change name of active worksheet
+        self.excelfile = os.path.splitext(op2_path)[0] + '.xlsx'   # instantiate excel workbook name
+        self.workbook = Workbook()
+        self.ws_counter = int(0)                                   # instantiate counter for excel sheets
+        ws = self.workbook.active
+        ws.sheet_view.showGridLines = False                        # grid lines off
+        ws.title = 'Index_of_results'                              # change name of active worksheet
         ws['A1'] = 'Index of results extracted with OP_Map from OP2 file: ' + op2_path
         ws['A1'].font = Font(size = 16, bold = True)
-        ws['A2'] = 'OP_Map by Félix R. López M., version: beta'
+        ws['A2'] = 'OP_Map by Félix R. López M., version: ' + self.OP_Map_version
         ws['A2'].font = Font(size = 8, italic = True)
-
-        # Saving the excel workbook
-        wb.save(self.workbook)
+        self.workbook.save(self.excelfile)                         # Saving the excel workbook
 
         # Output message
-        print('Model initialized with OP_Map, version', OP_Map_version)
-        print('Created excel workbook:', self.workbook)
+        print('Model initialized with OP_Map library, version', self.OP_Map_version)
+        print('Created excel workbook:', self.excelfile)
 
-    def load_cases_list(self,force):
-        # Creating a list with all load cases
+
+    def load_cases_list(self, force):
+        ''' Method for creating a list with all load cases contained in the OP2
+        '''
         if self.lc_list_check == False:
             self.load_cases = [lc for lc in force.keys()]
-            print('Load cases in the op2 file:',len(self.load_cases)) 
+            print('Number of load cases in the op2 file:', len(self.load_cases)) 
             self.lc_list_check = True
         
-        return
+        return 
 
 
     def r_op2_2D_eforces(self):
-        ''' method for reading the element forces from the OP2 file
+        ''' Method for reading the element forces of CTRIA3 y CQUAD4 from the OP2 file
         '''
-
+        # Loading data from OP2
         self.op2.set_results(('force.ctria3_force','force.cquad4_force'))
         self.op2.read_op2(self.op2_path);
 
@@ -214,15 +166,15 @@ class Model:
             self.elem_to_idx[elm] = idx
 
         # Output message
-        print('Loaded ctria3 and cquad4 element forces in ELEMENT COORDINATE system from op2 file:', self.op2_path)
-
+        print('Loaded element forces of CTRIA3 and CQUAD4 in ELEMENT COORDINATE system from OP2 file:', self.op2_path)
+      
         return
 
 
     def r_op2_1D_eforces(self):
-        ''' method for reading the element forces from the OP2 file
+        ''' Method for reading the element forces of CROD from the OP2 file
         '''
-
+        # Loading data from OP2
         self.op2.set_results(('force.crod_force'))
         self.op2.read_op2(self.op2_path);
 
@@ -244,13 +196,14 @@ class Model:
             self.elem_to_idx[elm] = idx
 
         # Output message
-        print('Loaded crod element forces in ELEMENT COORDINATE system from op2 file:', self.op2_path)
+        print('Loaded element forces of CROD elements in ELEMENT COORDINATE system from OP2 file:', self.op2_path)
 
         return
 
 
     def r_op2_2D_eforces_matcoord(self, bdf_path):
-        ''' Method for reading the element forces contained in the OP2 file in material coordinates
+        ''' Method for reading the element forces of CTRIA3 y CQUAD4 from the OP2 file
+            in material coordinates
             bdf_path is the path to the bdf file that corresponds to the OP2 file
         '''
         # Reading bdf file
@@ -282,21 +235,21 @@ class Model:
             self.elem_to_idx[elm] = idx
 
         # Output message
-        print('Loaded ctria3 and cquad4 element forces in MATERIAL COORDINATE system from op2 file:', self.op2_path)
+        print('Loaded element forces of CTRIA3 and CQUAD4 elements in MATERIAL COORDINATE system from OP2 file:', self.op2_path)
 
         return
 
 
     def list_lc(self, excel=False):
         ''' Method for listing the load cases in the OP2 file '''
-        print(self.load_cases)
+        print(f'List of load cases contained in the OP2 file: {self.load_cases}')
 
         if excel:
             self.ws_counter += 1
             tag = 'List of load cases in the OP2 file'
-            save_in_excel(self.workbook, self.ws_counter, tag, [self.load_cases])
+            self.save_in_excel(tag, [self.load_cases])
 
-        return
+        return self.load_cases
 
 
     def change_mapping(self, new_mapping_path):
@@ -319,6 +272,9 @@ class Model:
         '''
         # Mapping extraction for given component
         elm_mapping_flt, x_labels, y_labels, n_dim, m_dim, = mapping_extraction(component, self.mapping_path)
+
+        # Deflattening
+        elm_mapping = np.array(elm_mapping_flt).reshape(n_dim, m_dim)
 
         # Mask creation for filtering results before plotting: 0 for -666 elements and 1 for all the others
         elm_mapping_flt_mask = [1 if elm != -666 else np.nan for elm in elm_mapping_flt]
@@ -374,38 +330,12 @@ class Model:
         # Removing values from -666 elements
         output_env_lc = np.multiply(output_env_lc, elm_mapping_mask)
 
-        # Plotting heatmaps (fishtail shape)
-        plt.figure(figsize=(40,20))
-        # Plot 1
-        plt.subplot(2, 1, 1)
-        plot_1 = sns.heatmap(output_env, annot=True, fmt='.1f', annot_kws={"size": 20},
-                             linewidths=2, cmap='coolwarm',
-                             xticklabels=x_labels, yticklabels=y_labels);
-        formate_axes(plot_1)
-        plt.title('Component {}: {} element forces in dimension field {}'.format(
-            component, env_type, value_field), fontsize = 30)
-
-        # Plot 2
-        plt.subplot(2, 1, 2)
-        plot_2 = sns.heatmap(output_env_lc, annot=True, fmt='.0f', annot_kws={"size": 20},
-                             cmap=ListedColormap(['whitesmoke']),
-                             linewidths=1, linecolor='White',
-                             xticklabels=x_labels, yticklabels=y_labels);
-        formate_axes(plot_2)
-        plt.title('Component {}: load cases for {} element forces in dimension field {}'.format(
-            component, env_type, value_field), fontsize = 30)
-
-        # Turning the plot into an image
-        plot_img = fig2img(plot_1.get_figure())
-
-        # Saving results in the excel workbook if required
-        if excel:
-            self.ws_counter += 1
-            tag = 'Component: {}. {} element forces in dimension {} and corresponding load cases'.format(
-                component, env_type, value_field)
-            save_in_excel(self.workbook, self.ws_counter, tag, [output_env, output_env_lc], img = plot_img)
+        # Plot and Save
+        tag = f'Component: {component}. {env_type} element forces in dimension {value_field}'
+        self.plot_and_save_env(output_env, output_env_lc, tag, x_labels, y_labels, excel)
 
         return
+
 
     def plot_env_1D_eforces(self, component, env_type, value_field, excel = False):
         ''' This methods plots the MAX, MIN or MAXABS element forces for the
@@ -421,6 +351,9 @@ class Model:
         '''
         # Mapping extraction for given component
         elm_mapping_flt, x_labels, y_labels, n_dim, m_dim, = mapping_extraction(component, self.mapping_path)
+
+        # Deflattening
+        elm_mapping = np.array(elm_mapping_flt).reshape(n_dim, m_dim)
 
         # Mask creation for filtering results before plotting: 0 for -666 elements and 1 for all the others
         elm_mapping_flt_mask = [1 if elm != -666 else np.nan for elm in elm_mapping_flt]
@@ -443,9 +376,6 @@ class Model:
             # Concatenating data from cquads and trias
             forces_lc = np.concatenate((rod_forces_lc), axis=1)
 
-            # Removing first dimension
-            #forces_lc = forces_lc.reshape(forces_lc.shape[1], forces_lc.shape[2])
-
             # Adding a first line of nan values associated to element index = 0 (dummy element-666)
             nones = np.repeat(np.nan, forces_lc.shape[1], axis=0).reshape(1, forces_lc.shape[1])
             forces_lc = np.concatenate((nones, forces_lc), axis=0)
@@ -455,7 +385,7 @@ class Model:
 
         # Deflattening
         output = output_flt.reshape(d_dim, n_dim, m_dim)
-
+        
         # Envelope options
         if env_type == 'MAX':
             output_env = np.max(output, axis=0)               # Maximum values
@@ -468,43 +398,16 @@ class Model:
             output_env_lc_idx = np.argmax(np.absolute(output), axis=0)    # Index in axis=0 of max abs values (=lc index)
         else:
             print('Incorrect envelope type selection. Choose MAX, MIN or MAXABS')
-
-        # From lc_index to lc id
+#        # From lc_index to lc id
         output_env_lc_flt = [self.load_cases[idx] for idx in output_env_lc_idx.reshape(-1).tolist()]
         output_env_lc = np.array(output_env_lc_flt).reshape(n_dim, m_dim)
+        
         # Removing values from -666 elements
         output_env_lc = np.multiply(output_env_lc, elm_mapping_mask)
-
-        # Plotting heatmaps (fishtail shape)
-        plt.figure(figsize=(40,20))
-        # Plot 1
-        plt.subplot(2, 1, 1)
-        plot_1 = sns.heatmap(output_env, annot=True, fmt='.1f', annot_kws={"size": 20},
-                             linewidths=2, cmap='coolwarm',
-                             xticklabels=x_labels, yticklabels=y_labels);
-        formate_axes(plot_1)
-        plt.title('Component {}: {} element forces in dimension field {}'.format(
-            component, env_type, value_field), fontsize = 30)
-
-        # Plot 2
-        plt.subplot(2, 1, 2)
-        plot_2 = sns.heatmap(output_env_lc, annot=True, fmt='.0f', annot_kws={"size": 20},
-                             cmap=ListedColormap(['whitesmoke']),
-                             linewidths=1, linecolor='White',
-                             xticklabels=x_labels, yticklabels=y_labels);
-        formate_axes(plot_2)
-        plt.title('Component {}: load cases for {} element forces in dimension field {}'.format(
-            component, env_type, value_field), fontsize = 30)
-
-        # Turning the plot into an image
-        plot_img = fig2img(plot_1.get_figure())
-
-        # Saving results in the excel workbook if required
-        if excel:
-            self.ws_counter += 1
-            tag = 'Component: {}. {} element forces in dimension {} and corresponding load cases'.format(
-                component, env_type, value_field)
-            save_in_excel(self.workbook, self.ws_counter, tag, [output_env, output_env_lc], img = plot_img)
+        
+        # Plot and Save
+        tag = f'Component: {component}. {env_type} element forces in dimension {value_field}'
+        self.plot_and_save_env(output_env, output_env_lc, tag, x_labels, y_labels, excel)
 
         return
 
@@ -523,6 +426,9 @@ class Model:
         '''
         # Mapping extraction for given component
         elm_mapping_flt, x_labels, y_labels, n_dim, m_dim, = mapping_extraction(component, self.mapping_path)
+
+        # Deflattening
+        elm_mapping = np.array(elm_mapping_flt).reshape(n_dim, m_dim)
 
         # From element_mapping (flatten) to index_mapping
         # Note that element with id -666 is turn into index 0 (and later in nan when getting the results)
@@ -547,25 +453,10 @@ class Model:
 
         # Deflattening
         output = output_flt.reshape(n_dim, m_dim)
-
-        # Plotting heatmap (fishtail shape)
-        plt.figure(figsize=(40,10))
-        plot = sns.heatmap(output, annot=True, fmt='.1f',  annot_kws={"size": 20},
-                           linewidths=2, cmap='coolwarm',
-                           xticklabels=x_labels, yticklabels=y_labels);
-        formate_axes(plot)
-        plt.title('Component {}: element forces in dimension field {} and for load case {}'.format(
-            component, value_field, lc), fontsize = 30)
-
-        # Turning the plot into an image
-        plot_img = fig2img(plot.get_figure())
-
-        # Saving results in the excel workbook if required
-        if excel:
-            self.ws_counter += 1
-            tag = 'Component: {}. Element forces in dimension {} and for load case '.format(
-                component, value_field) + str(lc)
-            save_in_excel(self.workbook, self.ws_counter, tag, [output], img = plot_img)
+         
+        # Plot and save
+        tag = f'Component: {component}. Element forces in dimension {value_field} and for load case {lc}'
+        self.plot_and_save(output, tag, x_labels, y_labels, 'coolwarm', excel)
 
         return
 
@@ -585,6 +476,9 @@ class Model:
         # Mapping extraction for given component
         elm_mapping_flt, x_labels, y_labels, n_dim, m_dim, = mapping_extraction(component, self.mapping_path)
 
+        # Deflattening
+        elm_mapping = np.array(elm_mapping_flt).reshape(n_dim, m_dim)
+
         # From element_mapping (flatten) to index_mapping
         # Note that element with id -666 is turn into index 0 (and later in nan when getting the results)
         idx_mapping = [self.elem_to_idx[elm] for elm in elm_mapping_flt]
@@ -595,9 +489,6 @@ class Model:
         # Concatenating data from cquads and trias
         forces_lc = np.concatenate((rod_forces_lc), axis=1)
 
-        # Removing first dimension
-        #forces_lc = forces_lc.reshape(forces_lc.shape[1], forces_lc.shape[2])
-
         # Adding a first line of nan values associated to element index = 0 (dummy element-666)
         nones = np.repeat(np.nan, forces_lc.shape[1], axis=0).reshape(1, forces_lc.shape[1])
         forces_lc = np.concatenate((nones, forces_lc), axis=0)
@@ -607,29 +498,12 @@ class Model:
 
         # Deflattening
         output = output_flt.reshape(n_dim, m_dim)
-
-        # Plotting heatmap (fishtail shape)
-        plt.figure(figsize=(40,10))
-        plot = sns.heatmap(output, annot=True, fmt='.1f',  annot_kws={"size": 20},
-                           linewidths=2, cmap='coolwarm',
-                           xticklabels=x_labels, yticklabels=y_labels);
-        formate_axes(plot)
-        plt.title('Component {}: element forces in dimension field {} and for load case {}'.format(
-            component, value_field, lc), fontsize = 30)
-
-        # Turning the plot into an image
-        plot_img = fig2img(plot.get_figure())
-
-        # Saving results in the excel workbook if required
-        if excel:
-            self.ws_counter += 1
-            tag = 'Component: {}. Element forces in dimension {} and for load case '.format(
-                component, value_field) + str(lc)
-            save_in_excel(self.workbook, self.ws_counter, tag, [output], img = plot_img)
+        
+        # Plot and save
+        tag = f'Component: {component}. Element forces in dimension {value_field} and for load case {lc}'
+        self.plot_and_save(output, tag, x_labels, y_labels, 'coolwarm', excel)
 
         return
-
-
 
 
     def plot_component_mapping(self, component, excel = False):
@@ -651,14 +525,23 @@ class Model:
         # Deflattening
         elm_mapping = np.array(elm_mapping_flt).reshape(n_dim, m_dim)
 
+        # Plot and save
+        tag = f'Component: {component}. Mapping of elements'
+        self.plot_and_save(elm_mapping, tag, x_labels, y_labels, ListedColormap(['whitesmoke']), excel)
+
+        return
+
+
+    def plot_and_save(self, output, tag, x_labels, y_labels, colormap, excel):
+        ''' This methos plot mapings and save them in excel file if requested (excel = True)
+        '''
         # Plotting heatmap (fishtail shape)
         plt.figure(figsize=(40,10))
-        plot = sns.heatmap(elm_mapping, annot=True, fmt='.0f', annot_kws={"size": 20},
-                           cmap=ListedColormap(['whitesmoke']),
-                           linewidths=1, linecolor='white',
+        plot = sns.heatmap(output, annot=True, fmt='.0f',  annot_kws={"size": 20},
+                           linewidths=2, cmap=colormap,
                            xticklabels=x_labels, yticklabels=y_labels);
         formate_axes(plot)
-        plt.title('Element mapping of component: {}'.format(component), fontsize = 30)
+        plt.title(tag, fontsize = 30)
 
         # Turning the plot into an image
         plot_img = fig2img(plot.get_figure())
@@ -666,7 +549,87 @@ class Model:
         # Saving results in the excel workbook if required
         if excel:
             self.ws_counter += 1
-            tag = 'Component: {}. Mapping of elements'.format(component)
-            save_in_excel(self.workbook, self.ws_counter, tag, [elm_mapping], img = plot_img)
+            self.save_in_excel(tag, [output], img = plot_img)
+
+        return
+
+
+    def plot_and_save_env(self, output_env, output_env_lc, tag, x_labels, y_labels, excel):
+        ''' This methos plot envelope mapings and save them in excel file if requested (excel = True)
+        '''
+        # Plotting heatmaps (fishtail shape)
+        plt.figure(figsize=(40,20))
+        
+        # Plot 1
+        plt.subplot(2, 1, 1)
+        plot_1 = sns.heatmap(output_env, annot=True, fmt='.0f', annot_kws={"size": 20},
+                             linewidths=2, cmap='coolwarm',
+                             xticklabels=x_labels, yticklabels=y_labels);
+        formate_axes(plot_1)
+        plt.title(tag, fontsize = 30)
+
+        # Plot 2
+        plt.subplot(2, 1, 2)
+        plot_2 = sns.heatmap(output_env_lc, annot=True, fmt='.0f', annot_kws={"size": 20},
+                             cmap=ListedColormap(['whitesmoke']),
+                             linewidths=1, linecolor='White',
+                             xticklabels=x_labels, yticklabels=y_labels);
+        formate_axes(plot_2)
+        plt.title(('Critical load cases. ' + tag), fontsize = 30)
+
+        # Turning the plot into an image
+        plot_img = fig2img(plot_1.get_figure())
+
+        # Saving results in the excel workbook if required
+        if excel:
+            self.ws_counter += 1
+            self.save_in_excel(tag, [output_env, output_env_lc], img = plot_img)
+
+        return
+    
+    
+    def save_in_excel(self, tag, data_list, img=None):
+        ''' + workbook is the path/name of an already created excel file
+            + tag is an identification aboute the data
+            + data is a numpy object
+            + img is an image (optional)
+        '''
+        # Load excel workbook
+        book = load_workbook(self.excelfile)
+
+        # Name for a new workbook sheet with a sequencial id
+        ws_name = f"Sheet_{self.ws_counter}"
+
+        # Write a line in the Index_of_results sheet of the workbook  
+        ws_index = book['Index_of_results']
+        cell_pos = f'A{4 + self.ws_counter}'
+        ws_index[cell_pos] =f"{ws_name} ----> {tag}"
+        ws_index[cell_pos].font = Font(size=12, color="000000FF")
+
+        # Hyperlink from the new line in the index to its sheet
+        link = '#' + ws_name + '!A1'
+        ws_index[cell_pos].hyperlink = link
+
+        # Create new sheet
+        ws = book.create_sheet(title=ws_name)
+
+        # Writing the data in the corresponding new sheet
+        row_idx = 1
+        for data in data_list:
+            df = pd.DataFrame(data)    # Create a Pandas dataframe from the data
+            for r_idx, row in df.iterrows():
+                for c_idx, value in enumerate(row):
+                    ws.cell(row=row_idx, column=c_idx+1, value=value)
+                row_idx += 1
+
+        # Inserting the image in the new sheet
+        if img is not None:
+            excel_img = Img(img)
+            cell_pos = f"A{row_idx+2}"  # Dejar un espacio antes de la imagen
+            ws.add_image(excel_img, cell_pos)
+
+        # Save the workbook and output message
+        book.save(self.excelfile)
+        print('Results saved in excel workbook:', self.excelfile)
 
         return
